@@ -211,7 +211,7 @@ const handleAPIForgotPassword = (req, res) => {
         "Content-Type": "text/plain"
       })
       res.end("New password is required")
-      return 
+      return
     }
     const checkEmailUser = users.find(user => user.email === email)
     if (!checkEmailUser) {
@@ -248,6 +248,189 @@ const handleApiLogout = (req, res) => {
   res.end("Logout")
 }
 
+const handleApiGetItems = (req, res) => {
+  const sessionId = req.headers.cookie && req.headers.cookie.split("; ").find(item => item.startsWith("sessionId=")).split("=")[1]
+  if (!sessionId || !sessions[sessionId]) {
+    res.writeHead(401, {
+      "Content-Type": "text/plain"
+    })
+    res.end("Unauthorized")
+    return
+  }
+  res.writeHead(200, {
+    "Content-Type": "application/json"
+  })
+  res.end(JSON.stringify({
+    message: "Get items success",
+    data: items
+  }))
+}
+
+const handleApiGetItemDetail = (req, res) => {
+  const sessionId = req.headers.cookie && req.headers.cookie.split("; ").find(item => item.startsWith("sessionId=")).split("=")[1]
+  if (!sessionId || !sessions[sessionId]) {
+    res.writeHead(401, {
+      "Content-Type": "text/plain"
+    })
+    res.end("Unauthorized")
+    return
+  }
+  const reqUrl = url.parse(req.url, true)
+  const path = reqUrl.pathname
+  const itemId = parseInt(path.split("/")[3])
+  const index = items.findIndex(item => item.id === itemId)
+  if (index === -1) {
+    res.writeHead(404, {
+      "Content-Type": "text/plain"
+    })
+    res.end("Item id not found")
+    return
+  }
+  res.writeHead(200, {
+    "Content-Type": "application/json"
+  })
+  res.end(JSON.stringify({
+    data: items[itemId]
+  }))
+}
+
+const handleApiGetPagination = (req, res) => {
+  const sessionId = req.headers.cookie && req.headers.cookie.split("; ").find(item => item.startsWith("sessionId=")).split("=")[1]
+  console.log("sessionId", sessionId)
+  if (!sessionId || !sessions[sessionId]) {
+    res.writeHead(401, {
+      "Content-Type": "text/plain"
+    })
+    res.end("Unauthorized")
+    return
+  }
+  const reqUrl = url.parse(req.url, true)
+  const pageIndex = parseInt(reqUrl.query.pageIndex) || 1
+  const limit = parseInt(reqUrl.query.limit) || 10
+  const startIndex = (pageIndex - 1) * limit
+  const endIndex = startIndex + limit - 1
+  let result = {
+    data: items.slice(startIndex, endIndex + 1),
+    itemPerPage: limit,
+    currentPageIndex: pageIndex,
+    totalPages: Math.ceil(items.length / limit)
+  }
+  res.writeHead(200, {
+    "Content-Type": "application/json"
+  })
+  res.end(JSON.stringify({
+    data: result
+  }))
+}
+
+const handleApiCreateNewItem = (req, res) => {
+  let body = ''
+  req.on("data", (chunk) => {
+    body += chunk.toString()
+  })
+  req.on("end", () => {
+    const sessionId = req.headers.cookie && req.headers.cookie.split("; ").find(item => item.startsWith("sessionId=")).split("=")[1]
+    if (!sessionId || !sessions[sessionId]) {
+      res.writeHead(401, {
+        "Content-Type": "text/plain"
+      })
+      res.end("Unauthorized")
+      return
+    }
+    if (sessions[sessionId].role !== "admin") {
+      res.writeHead(403, {
+        "Content-Type": "text/plain"
+      })
+      res.end("Forbidden")
+      return
+    }
+    let newItem = JSON.parse(body)
+    const { name, description } = newItem
+    if (!name) {
+      res.writeHead(400, {
+        "Content-Type": "text/plain"
+      })
+      res.end("Name is required")
+      return
+    }
+    if (!description) {
+      res.writeHead(400, {
+        "Content-Type": "text/plain"
+      })
+      res.end("Description is required")
+      return
+    }
+    newItem = { id: items.length + 1, ...newItem }
+    items.push(newItem)
+    res.writeHead(200, {
+      "Content-Type": "application/json"
+    })
+    res.end(JSON.stringify({
+      message: "Create new item success",
+      data: newItem
+    }))
+  })
+}
+
+const handleAPIUpdateItem = (req, res) => {
+  let body = '';
+  req.on("data", (chunk) => {
+    body += chunk.toString()
+  })
+  req.on("end", () => {
+    const sessionId = req.headers.cookie && req.headers.cookie.split("; ").find(item => item.startsWith("sessionId=")).split("=")[1]
+    console.log({ sessionId })
+    if (!sessionId || !sessions[sessionId]) {
+      res.writeHead(401, {
+        "Content-Type": "text/plain"
+      })
+      res.end("Unauthorized")
+      return
+    }
+    if (sessions[sessionId].role !== "admin") {
+      res.writeHead(403, {
+        "Content-Type": "text/plain"
+      })
+      res.end("Forbidden")
+      return
+    }
+    const reqUrl = url.parse(req.url, true)
+    const path = reqUrl.pathname
+    const itemId = parseInt(path.split("/")[3])
+    const index = items.findIndex(item => item.id === itemId)
+    if (index === -1) {
+      res.writeHead(404, {
+        "Content-Type": "text/plain"
+      })
+      res.end("Item Id Not Found")
+      return
+    }
+    const updateItem = JSON.parse(body)
+    const { name, description } = updateItem
+    if (!name) {
+      res.writeHead(400, {
+        "Content-Type": "text/plain"
+      })
+      res.end("Item name is required")
+      return
+    }
+    if (!description) {
+      res.writeHead(400, {
+        "Content-Type": "text/plain"
+      })
+      res.end("Item description is required")
+      return
+    }
+    items[index] = { ...items[index], ...updateItem }
+    res.writeHead(200, {
+      "Content-Type": "application/json"
+    })
+    res.end(JSON.stringify({
+      message: "Update item success",
+      data: items[index]
+    }))
+  })
+}
 
 const handleRequest = (req, res) => {
   const reqUrl = url.parse(req.url, true)
@@ -255,6 +438,7 @@ const handleRequest = (req, res) => {
   console.log("path", path)
   const method = req.method
   console.log("method", method)
+  const itemId = parseInt(path.split("/")[3])
   if (method === "POST" && path === "/api/auth/register") {
     handleAPIRegister(req, res)
   } else if (method === "POST" && path === "/api/auth/login") {
@@ -263,6 +447,18 @@ const handleRequest = (req, res) => {
     handleAPIChangePassword(req, res)
   } else if (method === "PUT" && path === "/api/auth/forgot-password") {
     handleAPIForgotPassword(req, res)
+  } else if (method === "POST" && path === "/api/auth/logout") {
+    handleApiLogout(req, res)
+  } else if (method === "GET" && path === "/api/items") {
+    handleApiGetItems(req, res)
+  } else if (method === "GET" && path.startsWith("/api/items/") && itemId) {
+    handleApiGetItemDetail(req, res)
+  } else if (method === "GET" && path === "/api/items/pagination") {
+    handleApiGetPagination(req, res)
+  } else if (method === "POST" && path === "/api/items") {
+    handleApiCreateNewItem(req, res)
+  } else if (method === "PUT" && path.startsWith("/api/items/") && itemId) {
+    handleAPIUpdateItem(req, res)
   }
   else {
     res.writeHead(404, { "Content-Type": "text/plain" })
@@ -276,7 +472,6 @@ const PORT = 3000
 server.listen(PORT, () => {
   console.log(`Running on ${PORT}`)
 })
-
 
 // const person = {
 //   name: "a",
