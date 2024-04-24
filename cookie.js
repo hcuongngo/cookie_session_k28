@@ -290,7 +290,7 @@ const handleApiGetItemDetail = (req, res) => {
     "Content-Type": "application/json"
   })
   res.end(JSON.stringify({
-    data: items[itemId]
+    data: items.find(item => item.id === itemId)
   }))
 }
 
@@ -432,6 +432,42 @@ const handleAPIUpdateItem = (req, res) => {
   })
 }
 
+const handleApiDeleteItem = (req, res) => {
+  const sessionId = req.headers.cookie && req.headers.cookie.split("; ").find(item => item.startsWith("sessionId=")).split("=")[1]
+  console.log("sessionId", sessionId)
+  if (!sessionId || !sessions[sessionId]) {
+    res.writeHead(401, {
+      "Content-Type": "text/plain"
+    })
+    res.end("Unauthorized")
+    return
+  }
+  if (sessions[sessionId].role !== "admin") {
+    res.writeHead(403, {
+      "Content-Type": "text/plain"
+    })
+    res.end("Forbidden")
+    return
+  }
+  const reqUrl = url.parse(req.url, true)
+  const path = reqUrl.pathname
+  const itemId = parseInt(path.split("/")[3])
+  console.log({ itemId })
+  const index = items.findIndex(item => item.id === itemId)
+  if (index === -1) {
+    res.writeHead(404, {
+      "Content-Type": "text/plain"
+    })
+    res.end("Item id not found")
+    return
+  }
+  items.splice(index, 1)
+  res.writeHead(200, {
+    "Content-Type": "text/plain"
+  })
+  res.end("Delete item success")
+}
+
 const handleRequest = (req, res) => {
   const reqUrl = url.parse(req.url, true)
   const path = reqUrl.pathname
@@ -459,8 +495,9 @@ const handleRequest = (req, res) => {
     handleApiCreateNewItem(req, res)
   } else if (method === "PUT" && path.startsWith("/api/items/") && itemId) {
     handleAPIUpdateItem(req, res)
-  }
-  else {
+  } else if (method === "DELETE" && path.startsWith("/api/items/") && itemId) {
+    handleApiDeleteItem(req, res)
+  } else {
     res.writeHead(404, { "Content-Type": "text/plain" })
     res.end("Not Found")
   }
