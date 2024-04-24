@@ -150,7 +150,28 @@ const handleApiChangePassword = (req, res) => {
     }
     const { email, password, newPassword } = JSON.parse(body)
     const checkEmailUser = users.find(user => user.email == email)
-    
+    if (!checkEmailUser) {
+      res.writeHead(401, {
+        "Content-Type": "text/plain"
+      })
+      res.end("Unauthorized")
+      return
+    }
+    const checkPasswordUser = await comparePassword(password, checkEmailUser.password)
+    if (!checkPasswordUser) {
+      res.writeHead(401, {
+        "Content-Type": "text/plain"
+      })
+      res.end("Unauthorized")
+      return
+    }
+    const hashedNewPassword = await hashPassword(newPassword)
+    checkEmailUser.password = hashedNewPassword
+    sessions[sessionId].password = hashedNewPassword
+    res.writeHead(200, {
+      "Content-Type": "text/plain"
+    })
+    res.end("Change password success")
   })
 }
 
