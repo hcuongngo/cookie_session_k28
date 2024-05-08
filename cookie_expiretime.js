@@ -368,7 +368,7 @@ const handleApiCreateNewItem = (req, res) => {
         "Content-Type": "text/plain"
       })
       res.end("Description is required")
-      return 
+      return
     }
     newItem = { id: items.length + 1, ...newItem }
     items.push(newItem)
@@ -384,7 +384,83 @@ const handleApiCreateNewItem = (req, res) => {
 
 const handleApiUpdateItem = (req, res) => {
   const sessionId = req.headers.cookie && req.headers.cookie.split("; ").find(cookie => cookie.startsWith("sessionId=")).split("=")[1]
-  
+  if (!sessionId && !sessions[sessionId]) {
+    res.writeHead(401, {
+      "Content-Type": "text/plain"
+    })
+    res.end("Unauthorized")
+    return
+  }
+  const expiredTime = req.headers.cookie && req.headers.cookie.split("; ").find(cookie => cookie.startsWith("Expires=")).split("=")[1]
+  if (parseInt(expiredTime) < moment().unix()) {
+    delete sessions[sessionId]
+    res.writeHead(401, {
+      "Content-Type": "text/plain"
+    })
+    res.end("Cookie expired. Login again")
+    return
+  }
+  if (sessions[sessionId].role !== "admin") {
+    res.writeHead(403, {
+      "Content-Type": "text/plain"
+    })
+    res.end("Forbidden")
+    return
+  }
+  const reqUrl = url.parse(req.url, true)
+  const path = reqUrl.pathname
+  const itemId = parseInt(path.split("/")[3])
+  const checkItemIndex = items.findIndex(item => item.id === itemId)
+  console.log("checkItemIndex", checkItemIndex)
+  if (!checkItemIndex) {
+    res.writeHead(404, {
+      "Content-Type": "text/plain"
+    })
+    res.end("Item not found")
+    return
+  }
+  let body = ""
+  req.on("data", (chunk) => {
+    body += chunk.toString()
+  })
+  req.on("end", () => {
+    let updateItem = JSON.parse(body)
+    const { name, description } = updateItem
+    if (!name) {
+      res.writeHead(400, {
+        "Content-Type": "text/plain"
+      })
+      res.end("Name is required")
+      return
+    }
+    if (!description) {
+      res.writeHead(400, {
+        "Content-Type": "text/plain"
+      })
+      res.end("Description is required")
+      return
+    }
+    items[checkItemIndex] = { ...items[checkItemIndex], ...updateItem }
+    res.writeHead(200, {
+      "Content-Type": "application/json"
+    })
+    res.end(JSON.stringify({
+      message: "Update item success",
+      data: items[checkItemIndex]
+    }))
+  })
+}
+
+const handleApiDeleteItem = (req, res) => {
+  const sessionId = req.headers.cookie && req.headers.cookie.split("; ").find(cookie => cookie.startsWith("sessionId=")).split("=")[1]
+  if(!sessionId || !sessions[sessionId]) {
+    res.writeHead(401, {
+      "Content-Type": "text/plain"
+    })
+    res.end("Unauthorized")
+    return
+  }
+  const expiredTime = req.headers.cookie && req.headers.cookie.split("; ").find(cookie => cookie.startsWith("Expires=")).split("=")[1]
 }
 
 const handleRequest = (req, res) => {
@@ -410,6 +486,8 @@ const handleRequest = (req, res) => {
     handleApiGetItemsPagination(req, res)
   } else if (req.method === "POST" && path === "/api/items") {
     handleApiCreateNewItem(req, res)
+  } else if (req.method === "PUT" && path.startsWith("/api/items/") && itemId) {
+    handleApiUpdateItem(req, res)
   }
   else {
     res.writeHead(404, {
